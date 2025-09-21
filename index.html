@@ -3,30 +3,42 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Tulipanes Amarillos — Detalle</title>
+<title>Detalle para ti</title>
 <style>
   :root{
+    --bg:#0b0e10;
+    --sky1:#0f1a20; --sky2:#122431;
+    --sun:#ffd54a;
+    --stem:#1e7a4e;
+    --leaf:#2aa66f;
+    --petal1:#ffd94d;
+    --petal2:#fff799;
+    --petalEdge:#fffde0;
+    --disk:#6b3e14;
+    --hud:#ffffffcc;
+  }
+  [data-night="false"]{
     --bg:#f8fbff;
     --sky1:#bfe3ff; --sky2:#e8f4ff;
     --sun:#ffd54a;
     --stem:#2f8a57;
     --leaf:#39b977;
     --petal1:#ffd94d;
-    --petal2:#ffec80;
-    --petalEdge:#fffde0;
+    --petal2:#fff799;
+    --petalEdge:#ffffff;
     --disk:#7a4a1a;
     --hud:#00121ecc;
   }
-  html,body{height:100%;margin:0;background:var(--bg);font-family:Arial, sans-serif;}
+  html,body{height:100%;margin:0;background:var(--bg);}
   #c{display:block;width:100vw;height:100vh;background:linear-gradient(to bottom, var(--sky2), var(--sky1));}
   .ui{
     position:fixed; right:1rem; bottom:1rem;
-    display:flex; gap:.5rem; flex-wrap:wrap; z-index:10;
+    display:flex; gap:.5rem; flex-wrap:wrap;
   }
   .ui button{
     border:0;padding:.6rem .9rem;
     border-radius:999px;background:var(--hud);
-    color:#fff;font-weight:700;cursor:pointer;
+    color:#000;font-weight:700;cursor:pointer;
   }
   @media(max-width:480px){
     .ui{flex-direction:column;right:.5rem;bottom:.5rem;}
@@ -34,95 +46,184 @@
   }
 </style>
 </head>
-<body>
+<body data-night="true">
 <canvas id="c"></canvas>
 <div class="ui">
+  <button id="toggle">🌗 Noche/Día</button>
+  <button id="heart">❤️ Corazón</button>
+  <button id="save">💾 Guardar PNG</button>
   <button id="regen">♻️ Regenerar</button>
 </div>
+
 <script>
 (() => {
   const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
-  let W,H,DPR;
+  let W=innerWidth,H=innerHeight,DPR=devicePixelRatio||1;
+  canvas.width=W*DPR;canvas.height=H*DPR;ctx.scale(DPR,DPR);
+  const TAU=Math.PI*2;
+  const GOLDEN_ANGLE=Math.PI*(3-Math.sqrt(5));
   const rand=(a=0,b=1)=>Math.random()*(b-a)+a;
+  function color(name){return getComputedStyle(document.body).getPropertyValue(name).trim();}
   
-  const FLOWERS=[];
-  function resize(){
-    DPR=window.devicePixelRatio||1;
-    W=innerWidth;H=innerHeight;
-    canvas.width=W*DPR;canvas.height=H*DPR;
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.scale(DPR,DPR);
-    seedFlowers();
-  }
+  function perlin(x){ return Math.sin(x*0.5)+Math.sin(x*0.13)*0.5; }
 
-  function seedFlowers(){
+  let heartMode=false;
+  const FLOWERS=[];
+  function seedFlowers(n=200){
     FLOWERS.length=0;
-    // número de flores proporcional al área
-    const n=Math.floor((W*H)/18000);
-    const baseY=H*0.92;
+    const cx=W/2,cy=H*0.9,scale=Math.min(W,H)*0.022;
     for(let i=0;i<n;i++){
+      const a=i*GOLDEN_ANGLE,r=scale*Math.sqrt(i);
       FLOWERS.push({
-        x:rand(W*0.1,W*0.9),
-        y:baseY+rand(-10,10),
-        height:rand(H*0.15,H*0.28),
-        color1:"var(--petal1)",
-        color2:"var(--petal2)"
+        id:i,
+        x:cx+Math.cos(a)*r+rand(-40,40),
+        y:cy+Math.sin(a)*r*0.35+rand(-20,20),
+        height:rand(H*0.18,H*0.32),
+        headR:rand(16,26),
+        swayPhase:rand(0,TAU)
       });
     }
   }
 
-  function drawStem(x,y,h){
+  function drawStem(x,y,h,angle){
     ctx.beginPath();
     ctx.moveTo(x,y);
-    ctx.lineTo(x,y-h);
-    ctx.strokeStyle=getComputedStyle(document.body).getPropertyValue('--stem');
+    for(let i=0;i<=20;i++){
+      const t=i/20;
+      const sway=Math.sin(angle+t*2)*6*t; // curva del tallo
+      ctx.lineTo(x+sway,y-h*t);
+    }
+    ctx.strokeStyle=color('--stem');
     ctx.lineWidth=3;
     ctx.stroke();
-    // hoja simple
+
+    // hoja
     ctx.beginPath();
-    ctx.ellipse(x-8,y-h*0.5,14,6,Math.PI/4,0,Math.PI*2);
-    ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--leaf');
+    ctx.ellipse(x-8,y-h*0.5,14,6,Math.PI/4,0,TAU);
+    ctx.fillStyle=color('--leaf');
     ctx.fill();
   }
 
-  function drawTulip(x,y,h,c1,c2){
-    const topY=y-h;
-    drawStem(x,y,h);
+function drawHead(x,y,r,t){
+  ctx.save();
+  ctx.translate(x,y);
+
+  // 🌬️ balanceo
+  const sway=Math.sin(t*0.002 + r)*0.2;
+  ctx.rotate(sway);
+
+  const grad=ctx.createLinearGradient(0,-r*2.6,0,0);
+  grad.addColorStop(0,color('--petal1'));
+  grad.addColorStop(1,color('--petal2'));
+
+  // 🌷 pétalo central
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.bezierCurveTo(-r*0.8,-r*1.4, -r*1.2,-r*2.2, 0,-r*2.6);
+  ctx.bezierCurveTo(r*1.2,-r*2.2, r*0.8,-r*1.4, 0,0);
+  ctx.fillStyle=grad;ctx.fill();
+
+  // 🌷 pétalo izquierdo
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.bezierCurveTo(-r*1.4,-r*1.2, -r*1.6,-r*2.0, -r*0.4,-r*2.4);
+  ctx.bezierCurveTo(-r*0.2,-r*2.6, -r*0.1,-r*1.6, 0,0);
+  ctx.fillStyle=grad;ctx.fill();
+
+  // 🌷 pétalo derecho
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.bezierCurveTo(r*1.4,-r*1.2, r*1.6,-r*2.0, r*0.4,-r*2.4);
+  ctx.bezierCurveTo(r*0.2,-r*2.6, r*0.1,-r*1.6, 0,0);
+  ctx.fillStyle=grad;ctx.fill();
+
+  // ✨ centro blanco luminoso
+  const glow=ctx.createRadialGradient(0,-r*1.6, 2, 0,-r*1.6, r*0.8);
+  glow.addColorStop(0,"rgba(255,255,255,0.9)");
+  glow.addColorStop(1,"rgba(255,255,255,0)");
+  ctx.fillStyle=glow;
+  ctx.beginPath();
+  ctx.ellipse(0,-r*1.6, r*0.6, r*0.8, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+
+  function heartPosition(idx,total){
+    const theta=(idx/total)*TAU*1.2;
+    const [hx,hy]=[
+      16*Math.pow(Math.sin(theta),3),
+      13*Math.cos(theta)-5*Math.cos(2*theta)-2*Math.cos(3*theta)-Math.cos(4*theta)
+    ];
+    const s=Math.min(W,H)*0.028;
+    return [W/2+hx*s, H*0.55-hy*s*0.9];
+  }
+
+  function drawFlowers(t){
+    FLOWERS.sort((a,b)=>a.y-b.y);
+    const n=FLOWERS.length;
+    for(const f of FLOWERS){
+      const wind=perlin(t*0.001+f.swayPhase);
+      const angle=wind*0.3;
+      let topX=f.x+wind*10,topY=f.y-f.height;
+      if(heartMode){ [topX,topY]=heartPosition(f.id,n); }
+      drawStem(f.x,f.y,f.height,angle);
+      drawHead(topX,topY,f.headR,t+f.swayPhase*1000);
+    }
+  }
+
+  function drawSun(){
+    const sunX=W*0.85,sunY=H*0.15;
+    const g=ctx.createRadialGradient(sunX,sunY,20,sunX,sunY,140);
+    g.addColorStop(0,color('--sun'));
+    g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.arc(sunX,sunY,140,0,TAU);ctx.fill();
+  }
+
+  function drawWatermark(){
     ctx.save();
-    ctx.translate(x,topY);
-    // pétalos tulipán: corazón invertido
-    ctx.beginPath();
-    ctx.moveTo(0,0);
-    ctx.bezierCurveTo(-15,-20, -25,-40, 0,-50);
-    ctx.bezierCurveTo(25,-40, 15,-20, 0,0);
-    const grad=ctx.createLinearGradient(0,-50,0,0);
-    grad.addColorStop(0,c1);grad.addColorStop(1,c2);
-    ctx.fillStyle=grad;
-    ctx.fill();
+    ctx.font="bold 20px Arial";
+    ctx.fillStyle="rgba(255,255,255,0.6)";
+    ctx.shadowColor="black";ctx.shadowBlur=4;
+    ctx.textAlign="left";
+    ctx.fillText("ING. Leo", 15, H-20);
     ctx.restore();
   }
 
-  function render(){
+  function render(ts){
     ctx.clearRect(0,0,W,H);
-    // sol
-    const sunX=W*0.85,sunY=H*0.15;
-    const g=ctx.createRadialGradient(sunX,sunY,20,sunX,sunY,140);
-    g.addColorStop(0,"var(--sun)");g.addColorStop(1,"transparent");
-    ctx.fillStyle=g;ctx.beginPath();ctx.arc(sunX,sunY,140,0,Math.PI*2);ctx.fill();
-    // flores
-    for(const f of FLOWERS){
-      drawTulip(f.x,f.y,f.height,f.color1,f.color2);
-    }
-    // watermark
-    ctx.save();ctx.font="bold 18px Arial";
-    ctx.fillStyle="rgba(0,0,0,0.4)";ctx.fillText("ING. Leo",15,H-20);ctx.restore();
+    drawSun();
+    drawFlowers(ts);
+    drawWatermark();
     requestAnimationFrame(render);
   }
 
-  document.getElementById('regen').onclick=()=>seedFlowers();
-  window.addEventListener('resize',resize);
-  resize();
+  seedFlowers(240);
   requestAnimationFrame(render);
+
+  document.getElementById('toggle').onclick=()=>{
+    const night=document.body.getAttribute('data-night')==='true';
+    document.body.setAttribute('data-night',night?'false':'true');
+  };
+  document.getElementById('heart').onclick=()=>{
+    heartMode=!heartMode;
+    document.getElementById('heart').textContent=heartMode?"💛 Normal":"❤️ Corazón";
+  };
+  document.getElementById('save').onclick=()=>{
+    const a=document.createElement('a');
+    a.download="tulipanes.png";
+    a.href=canvas.toDataURL();a.click();
+  };
+  document.getElementById('regen').onclick=()=>seedFlowers(240);
+
+  addEventListener('resize',()=>{
+    W=innerWidth;H=innerHeight;
+    canvas.width=W*DPR;canvas.height=H*DPR;
+    ctx.setTransform(1,0,0,1,0,0);ctx.scale(DPR,DPR);
+    seedFlowers(240);
+  });
 })();
 </script>
 </body>
